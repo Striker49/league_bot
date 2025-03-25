@@ -12,8 +12,17 @@ const TEST_COMMAND = {
   contexts: [0, 1, 2],
 };
 
+const ACTIVE_COMMAND = {
+  name: 'active',
+  description: 'See if player is in active game',
+  type: 1,
+  integration_types: [0, 1],
+  contexts: [0, 1, 2],
+};
+
+
 // Command containing options
 
-const ALL_COMMANDS = [TEST_COMMAND];
+const ALL_COMMANDS = [TEST_COMMAND, ACTIVE_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
