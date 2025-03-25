@@ -1,7 +1,58 @@
-require('dotenv').config();
-const axios = require('axios');
+import 'dotenv/config';
+import express from 'express';
+import axios from 'axios';
+import {
+  InteractionType,
+  InteractionResponseType,
+  InteractionResponseFlags,
+  MessageComponentTypes,
+  ButtonStyleTypes,
+  verifyKeyMiddleware,
+} from 'discord-interactions';
+import { getRandomEmoji, DiscordRequest } from './utils.js';
+import { startServer, app, PORT } from './server.js';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+
+
+startServer();
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
+
+app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
+    console.log("Received interaction request!");
+
+    const { type, id, data } = req.body;
+
+    if (type === InteractionType.PING) {
+        console.log("Responding to PING verification.");
+        return res.json({ type: InteractionResponseType.PONG });
+    }
+
+    if (type === InteractionType.APPLICATION_COMMAND) {
+        console.log(`Command received: ${data.name}`);
+
+        if (data.name === 'test') {
+            return res.json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: { content: `hello world ${getRandomEmoji()}` },
+            });
+        } else if (data.name === 'active') {
+            console.log("Handling 'active' command...");
+            getSummoner("darkPoguito", "NA1", "active");
+            return res.json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: { content: "Processing your request..." }
+            });
+        } else {
+            console.error(`Unknown command: ${data.name}`);
+            return res.status(400).json({ error: 'Unknown command' });
+        }
+    }
+
+    console.error(`Unknown interaction type: ${type}`);
+    return res.status(400).json({ error: 'Unknown interaction type' });
+});
+
 
 let puuid;
 let games = {};
@@ -19,7 +70,7 @@ async function getSummoner(summonerName, tag) {
 
     try {
         const response = await axios.get(url, { headers });
-        console.log(response.data);
+        //console.log(response.data);
         puuid = response.data["puuid"];
     } catch (error) {
         console.error("Error fetching summoner:", error.response.data);
@@ -29,7 +80,7 @@ async function getSummoner(summonerName, tag) {
 }
 
 async function getGames() {
-    url = `https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`;
+    const url = `https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`;
     const headers = { 
         headers: { 
             "X-Riot-Token": RIOT_API_KEY 
@@ -38,7 +89,7 @@ async function getGames() {
     //console.log("Last 20 games", puuid);
     try {
         const response = await axios.get(url, headers);
-        console.log(response.data);
+       // console.log(response.data);
         games = response.data;
 
     } catch (error) {
@@ -51,7 +102,7 @@ async function getGames() {
 
 async function getWinOrLoss() {
     console.log("Last Game info: ", games[0]);
-    url = `https://americas.api.riotgames.com/lol/match/v5/matches/${games[0]}`;
+    const url = `https://americas.api.riotgames.com/lol/match/v5/matches/${games[0]}`;
     const headers = { 
         headers: { 
             "X-Riot-Token":RIOT_API_KEY 
@@ -59,7 +110,7 @@ async function getWinOrLoss() {
     };
     try {
         const response = await axios.get(url, headers);
-        console.log(response.data);
+        //console.log(response.data);
         gameData = response.data;
     } catch (error) {
         console.error("Error fetching summoner:", error.response.data);
@@ -83,7 +134,7 @@ async function getWinOrLoss() {
 
 async function getActiveGame() {
     console.log("\nChecking Active Game: ");
-    url = `https://na1.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/${puuid}`;
+    const url = `https://na1.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/${puuid}`;
     const headers = { 
         headers: { 
             "X-Riot-Token":RIOT_API_KEY 
@@ -116,7 +167,7 @@ async function getActiveGame() {
 }
 
 async function fetchChampionId() {
-    url = "https://ddragon.leagueoflegends.com/cdn/14.5.1/data/en_US/champion.json";
+    const url = "https://ddragon.leagueoflegends.com/cdn/14.5.1/data/en_US/champion.json";
 
     try {
         const response = await axios.get(url);
@@ -132,4 +183,4 @@ async function fetchChampionId() {
 }
 
 //fetchChampionId();
-getSummoner("astrasepram", "NA1");
+//getSummoner("darkPoguito", "NA1", "active");
