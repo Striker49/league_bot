@@ -12,6 +12,20 @@ import {
 import { getRandomEmoji, DiscordRequest } from './utils.js';
 import { startServer, app, PORT } from './server.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { capitalize } from './utils.js';
+
+
+let puuid;
+let playerId;
+let championId;
+let png;
+let spell1Img;
+let spell2Img;
+let games = {};
+let gameData = {};
+let championMap = {};
+let activeGame = {};
+let ddragonData = {};
 
 
 startServer();
@@ -36,26 +50,49 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: { content: `hello ${data[1]} ${getRandomEmoji()}` },
             });
-        } else if (data.name === 'active') {
+        } 
+        else if (data.name === 'active') {
             console.log("Handling 'active' command...");
+
             resetVar();
             const summonerName = data.options.find(opt => opt.name === 'summonername')?.value;
             const summonerTag = data.options.find(opt => opt.name === 'summonertag')?.value;
-            activeGame = await getSummoner(summonerName, summonerTag);
-            console.log("activeGame.gameId", activeGame.gameId);
+
+            await getSummoner(summonerName, summonerTag);
+            await getGames();
+            await getActiveGame();
+
             if (!activeGame.gameId)
                 return res.json({
                     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                     data: { content: `Status: Not currently in game.` }
                 });
-            return res.json({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: `Status: In Game"\n
-                    Game Mode: ${activeGame.gameMode}\n
-                    Game Type: ${activeGame.gameType}\n
-                    Champion: ${championMap[championId]}` }
-            });
-        } else {
+                return res.json({
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: {
+                        embeds: [
+                            {
+                                image: { url: png }, // Champion icon
+                                title: `${capitalize(summonerName)}`,
+                                description: `Status: In Game\nGame Mode: ${activeGame.gameMode}\nGame Type: ${activeGame.gameType}`,
+                                fields: [
+                                    {
+                                        name: "",
+                                        value: `${spell1Img}`,
+                                        inline: true
+                                        
+                                    },
+                                    {
+                                        name: "",
+                                        value: `${spell2Img}`,
+                                        inline: true
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                });
+                
             console.error(`Unknown command: ${data.name}`);
             return res.status(400).json({ error: 'Unknown command' });
         }
@@ -64,15 +101,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     console.error(`Unknown interaction type: ${type}`);
     return res.status(400).json({ error: 'Unknown interaction type' });
 });
-
-
-let puuid;
-let games = {};
-let gameData = {};
-let playerId;
-let championId;
-let championMap = {};
-let activeGame = {};
 
 async function getSummoner(summonerName, tag) {
     summonerName = summonerName.replace(" ", "%20");
@@ -88,7 +116,6 @@ async function getSummoner(summonerName, tag) {
         console.error("Error fetching summoner:", error.response.data);
         console.error("RIOT_API_KEY", RIOT_API_KEY);
     }
-    return (getGames());
 }
 
 async function getGames() {
@@ -108,7 +135,6 @@ async function getGames() {
         console.error("Error fetching summoner:", error.response.data);
         console.error("RIOT_API_KEY", RIOT_API_KEY);
     }
-    return (getWinOrLoss());
 
 }
 
@@ -141,7 +167,6 @@ async function getWinOrLoss() {
     console.log("Champion", gameData.info.participants[i].championName);
     console.log("Role", gameData.info.participants[i].role);
     console.log("win", gameData.info.participants[i].win);
-    return getActiveGame();
 }
 
 async function getActiveGame() {
@@ -170,13 +195,16 @@ async function getActiveGame() {
             }
         }
         await fetchChampionId();
+        png = await fetchChampionImg(championMap[championId], activeGame.participants[i].spell1Id, activeGame.participants[i].spell2Id);
+        console.log("activeGame", activeGame);
+        console.log('png: ', png);
+        console.log('spell1: ', spell1Img);
+        console.log('spell2: ', spell2Img);
         console.log("In Game");
         console.log(activeGame.gameMode);
         console.log(activeGame.gameType);
         console.log(championMap[championId]);
     }
-    return activeGame;
-
 }
 
 async function fetchChampionId() {
@@ -184,7 +212,7 @@ async function fetchChampionId() {
 
     try {
         const response = await axios.get(url);
-        const ddragonData = response.data.data;
+        ddragonData = response.data.data;
         championMap = Object.values(ddragonData).reduce((map, champ) => {
             map[parseInt(champ.key)] = champ.name;
             return map;
@@ -193,6 +221,16 @@ async function fetchChampionId() {
     catch (error) {
         console.error("Error fetching champion Ids");
     }
+}
+
+async function fetchChampionImg(championName, spell1, spell2) {
+    const response = await fetch("https://ddragon.leagueoflegends.com/api/versions.json");
+    const versions = await response.json();
+    const latestPatch = versions[0];
+    spell1Img = `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/spell/SummonerFlash.png`
+    spell2Img = `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/spell/SummonerTeleport.png`
+
+    return `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/champion/${championName}.png`;
 }
 
 function resetVar() {
@@ -204,5 +242,3 @@ function resetVar() {
     championMap = {};
     activeGame = {};
 }
-//fetchChampionId();
-//getSummoner("darkPoguito", "NA1", "active");
