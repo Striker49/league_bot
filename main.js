@@ -29,19 +29,31 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     }
 
     if (type === InteractionType.APPLICATION_COMMAND) {
-        console.log(`Command received: ${data.name}`);
+        console.log(`Command received: ${data.type}`);
 
         if (data.name === 'test') {
             return res.json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: `hello world ${getRandomEmoji()}` },
+                data: { content: `hello ${data[1]} ${getRandomEmoji()}` },
             });
         } else if (data.name === 'active') {
             console.log("Handling 'active' command...");
-            getSummoner("darkPoguito", "NA1", "active");
+            resetVar();
+            const summonerName = data.options.find(opt => opt.name === 'summonername')?.value;
+            const summonerTag = data.options.find(opt => opt.name === 'summonertag')?.value;
+            activeGame = await getSummoner(summonerName, summonerTag);
+            console.log("activeGame.gameId", activeGame.gameId);
+            if (!activeGame.gameId)
+                return res.json({
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: { content: `Status: Not currently in game.` }
+                });
             return res.json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: "Processing your request..." }
+                data: { content: `Status: In Game"\n
+                    Game Mode: ${activeGame.gameMode}\n
+                    Game Type: ${activeGame.gameType}\n
+                    Champion: ${championMap[championId]}` }
             });
         } else {
             console.error(`Unknown command: ${data.name}`);
@@ -59,7 +71,7 @@ let games = {};
 let gameData = {};
 let playerId;
 let championId;
-let championMap;
+let championMap = {};
 let activeGame = {};
 
 async function getSummoner(summonerName, tag) {
@@ -76,7 +88,7 @@ async function getSummoner(summonerName, tag) {
         console.error("Error fetching summoner:", error.response.data);
         console.error("RIOT_API_KEY", RIOT_API_KEY);
     }
-    getGames();
+    return (getGames());
 }
 
 async function getGames() {
@@ -96,7 +108,7 @@ async function getGames() {
         console.error("Error fetching summoner:", error.response.data);
         console.error("RIOT_API_KEY", RIOT_API_KEY);
     }
-    getWinOrLoss()
+    return (getWinOrLoss());
 
 }
 
@@ -129,7 +141,7 @@ async function getWinOrLoss() {
     console.log("Champion", gameData.info.participants[i].championName);
     console.log("Role", gameData.info.participants[i].role);
     console.log("win", gameData.info.participants[i].win);
-    getActiveGame()
+    return getActiveGame();
 }
 
 async function getActiveGame() {
@@ -163,6 +175,7 @@ async function getActiveGame() {
         console.log(activeGame.gameType);
         console.log(championMap[championId]);
     }
+    return activeGame;
 
 }
 
@@ -182,5 +195,14 @@ async function fetchChampionId() {
     }
 }
 
+function resetVar() {
+    puuid;
+    games = {};
+    gameData = {};
+    playerId;
+    championId;
+    championMap = {};
+    activeGame = {};
+}
 //fetchChampionId();
 //getSummoner("darkPoguito", "NA1", "active");
