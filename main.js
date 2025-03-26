@@ -77,7 +77,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                             {
                                 image: { url: png }, // Champion icon
                                 title: `${capitalize(summonerName)}`,
-                                description: `Status: In Game\nGame Mode: ${activeGame.gameMode}\nGame Type: ${activeGame.gameType}`,
+                                description: `Status: In Game\nGame Mode: ${activeGame.gameMode}\nGame Type: ${activeGame.gameQueueConfigId == 420 ? 'Ranked' : activeGame.gameType}`,
                                 fields: [
                                     {
                                         name: "",
@@ -91,7 +91,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                         inline: true
                                     }
                                 ]
-                            }
+                            },
+
                         ]
                     }
                 });
@@ -199,10 +200,10 @@ async function getActiveGame() {
         }
         await fetchChampionId();
         png = await fetchChampionImg(championMap[championId], activeGame.participants[i].spell1Id, activeGame.participants[i].spell2Id);
-        //console.log("activeGame", activeGame);
+        console.log("activeGame", activeGame);
         console.log('png: ', png);
-        console.log('spell1: ', spell1Img);
-        console.log('spell2: ', spell2Img);
+        console.log('spell1: ', spell1Img.name);
+        console.log('spell2: ', spell2Img.name);
         console.log("In Game");
         console.log(activeGame.gameMode);
         console.log(activeGame.gameType);
@@ -231,11 +232,11 @@ async function fetchChampionImg(championName, spell1, spell2) {
     const versions = await response.json();
     latestPatch = versions[0];
     spellMap = await fetchSSId()
-    console.log("spellMap", spellMap);
+    //console.log("spellMap", spellMap);
     spell1Img = await getSpellImageAndName(spell1);
     spell2Img = await getSpellImageAndName(spell2);
-    console.log("ss img", spell1Img);
-    console.log("ss img", spell2);
+    //console.log("ss img", spell1Img);
+    //console.log("ss img", spell2);
     return `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/champion/${championName}.png`;
 }
 
@@ -249,7 +250,7 @@ async function fetchSSId() {
             map[parseInt(spell.key)] = spell.id;
             return map;
         }, {});
-        console.log("ss list: ", spellMap);
+        //console.log("ss list: ", spellMap);
         return spellMap;
     }
     catch (error) {
@@ -261,10 +262,10 @@ async function getSpellImageAndName(spellId) {
 
     const spell = spellMap[spellId];
 
-    console.log("ss image link: ", spell);
+    //console.log("ss image link: ", spell);
     if (spell) {
         return {
-            name: spell.name,
+            name: spell,
             image: `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/spell/${spell}.png`
         };
     }
