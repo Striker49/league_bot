@@ -18,14 +18,17 @@ import { capitalize } from './utils.js';
 let puuid;
 let playerId;
 let championId;
+let latestPatch;
 let png;
-let spell1Img;
-let spell2Img;
+let spell1Img = {};
+let spell2Img = {};
 let games = {};
 let gameData = {};
 let championMap = {};
+let spellMap = {};
 let activeGame = {};
 let ddragonData = {};
+let ddragonSS = {};
 
 
 startServer();
@@ -78,13 +81,13 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                 fields: [
                                     {
                                         name: "",
-                                        value: `${spell1Img}`,
+                                        value: `${spell1Img.image}`,
                                         inline: true
                                         
                                     },
                                     {
                                         name: "",
-                                        value: `${spell2Img}`,
+                                        value: `${spell2Img.image}`,
                                         inline: true
                                     }
                                 ]
@@ -196,7 +199,7 @@ async function getActiveGame() {
         }
         await fetchChampionId();
         png = await fetchChampionImg(championMap[championId], activeGame.participants[i].spell1Id, activeGame.participants[i].spell2Id);
-        console.log("activeGame", activeGame);
+        //console.log("activeGame", activeGame);
         console.log('png: ', png);
         console.log('spell1: ', spell1Img);
         console.log('spell2: ', spell2Img);
@@ -208,12 +211,12 @@ async function getActiveGame() {
 }
 
 async function fetchChampionId() {
-    const url = "https://ddragon.leagueoflegends.com/cdn/14.5.1/data/en_US/champion.json";
+    const url = "https://ddragon.leagueoflegends.com/cdn/15.6.1/data/en_US/champion.json";
 
     try {
         const response = await axios.get(url);
-        ddragonData = response.data.data;
-        championMap = Object.values(ddragonData).reduce((map, champ) => {
+        ddragonData = response.data;
+        championMap = Object.values(ddragonData.data).reduce((map, champ) => {
             map[parseInt(champ.key)] = champ.name;
             return map;
         }, {});
@@ -226,11 +229,46 @@ async function fetchChampionId() {
 async function fetchChampionImg(championName, spell1, spell2) {
     const response = await fetch("https://ddragon.leagueoflegends.com/api/versions.json");
     const versions = await response.json();
-    const latestPatch = versions[0];
-    spell1Img = `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/spell/SummonerFlash.png`
-    spell2Img = `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/spell/SummonerTeleport.png`
-
+    latestPatch = versions[0];
+    spellMap = await fetchSSId()
+    console.log("spellMap", spellMap);
+    spell1Img = await getSpellImageAndName(spell1);
+    spell2Img = await getSpellImageAndName(spell2);
+    console.log("ss img", spell1Img);
+    console.log("ss img", spell2);
     return `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/champion/${championName}.png`;
+}
+
+async function fetchSSId() {
+    const url = "https://ddragon.leagueoflegends.com/cdn/15.6.1/data/en_US/summoner.json";
+
+    try {
+        const response = await axios.get(url);
+        ddragonSS = response.data.data;
+        spellMap = Object.values(ddragonSS).reduce((map, spell) => {
+            map[parseInt(spell.key)] = spell.id;
+            return map;
+        }, {});
+        console.log("ss list: ", spellMap);
+        return spellMap;
+    }
+    catch (error) {
+        console.error("Error fetching spell Ids");
+    }
+}
+
+async function getSpellImageAndName(spellId) {
+
+    const spell = spellMap[spellId];
+
+    console.log("ss image link: ", spell);
+    if (spell) {
+        return {
+            name: spell.name,
+            image: `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/spell/${spell}.png`
+        };
+    }
+    return null;
 }
 
 function resetVar() {
