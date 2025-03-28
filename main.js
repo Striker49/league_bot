@@ -106,8 +106,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                new EmbedBuilder()
                                         .setURL(opURL)
                                         .setImage(png)
-                                        .setTitle("Champion Info")
-                                        .setDescription("Champion Details")
+                                        .setTitle(`${summonerName}`)
+                                        .setDescription(`Status: In Game\nGame Mode: ${activeGame.gameMode == 'CHERRY' ? 'ARENA' : activeGame.gameMode}\nGame Type: ${activeGame.gameQueueConfigId == '420' ? 'Ranked' : activeGame.gameType}`)
                                         .setFooter({ text: "footer" }), 
                                 new EmbedBuilder()
                                     .setURL(opURL)
