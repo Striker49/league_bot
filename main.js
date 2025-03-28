@@ -14,6 +14,7 @@ import { startServer, app, PORT } from './server.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { capitalize } from './utils.js';
 
+import { ApplicationCommand, EmbedBuilder } from 'discord.js';
 
 let puuid;
 let playerId;
@@ -38,7 +39,7 @@ const RIOT_API_KEY = process.env.RIOT_API_KEY;
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
     console.log("Received interaction request!");
 
-    const { type, id, data } = req.body;
+    const { type, id, token, application_id, data } = req.body;
 
     if (type === InteractionType.PING) {
         console.log("Responding to PING verification.");
@@ -56,54 +57,95 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         } 
         else if (data.name === 'active') {
             console.log("Handling 'active' command...");
-
+        
             resetVar();
             const summonerName = data.options.find(opt => opt.name === 'summonername')?.value;
             const summonerTag = data.options.find(opt => opt.name === 'summonertag')?.value;
-
+        
             await getSummoner(summonerName, summonerTag);
-            await getGames();
             await getActiveGame();
-
-            if (!activeGame.gameId)
+        
+            if (!activeGame.gameId) {
                 return res.json({
                     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                     data: { content: `Status: Not currently in game.` }
                 });
-                return res.json({
-                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                    data: {
-                        embeds: [
-                            {
-                                image: { url: png }, // Champion icon
-                                title: `${capitalize(summonerName)}`,
-                                description: `Status: In Game\nGame Mode: ${activeGame.gameMode == 'CHERRY' ? 'ARENA' : activeGame.gameMode}\nGame Type: ${activeGame.gameQueueConfigId == 420 ? 'Ranked' : activeGame.gameType}`,
-                                fields: [
-                                    {
-                                        name: "",
-                                        value: `${spell1Img.image}`,
-                                        inline: true
-                                        
-                                    },
-                                    {
-                                        name: "",
-                                        value: `${spell2Img.image}`,
-                                        inline: true
-                                    }
-                                ]
-                            },
+            }
+            // Step 1: Send Deferred Response
+            res.json({
+                type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+            });
+        
+            // Step 2: Process asynchronously
+            (async () => {
+                try {
+                    const opURL = `https://www.op.gg/summoners/na/${summonerName}-${summonerTag}`;
+        
+                    // const embeds = [
+                    //     new EmbedBuilder()
+                    //         .setURL(opURL)
+                    //         .setImage(png)
+                    //         .setTitle("Champion Info")
+                    //         .setDescription("Champion Details")
+                    //         .setFooter({ text: "footer" }),
+                    
+                    //     new EmbedBuilder()
+                    //         .setURL(opURL)
+                    //         .setImage(spell1Img.image)
+                    //         .setTitle("Summoner Spell 1")  // Ensure it has a title
+                    //         .setDescription("Spell details"), // Added description
+                    
+                    //     new EmbedBuilder()
+                    //         .setURL(opURL)
+                    //         .setImage(spell2Img.image)
+                    //         .setTitle("Summoner Spell 2")  // Ensure it has a title
+                    //         .setDescription("Spell details") // Added description
+                    // ].map(embed => embed.toJSON()); // Convert to JSON before sending
+                    
+                    const embeds = [
+                               new EmbedBuilder()
+                                        .setURL(opURL)
+                                        .setImage(png)
+                                        .setTitle("Champion Info")
+                                        .setDescription("Champion Details")
+                                        .setFooter({ text: "footer" }), 
+                                new EmbedBuilder()
+                                    .setURL(opURL)
+                                    .setImage(spell1Img.image)
+                                    .setTitle("Summoner Spell 1")  // Ensure it has a title
+                                    .setDescription("Spell details"), // Added description
 
-                        ]
+                                new EmbedBuilder()
+                                    .setURL(opURL)
+                                    .setImage(spell2Img.image)
+                                    .setTitle("Summoner Spell 2")  // Ensure it has a title
+                                    .setDescription("Spell details") // Added description
+                    ];
+        
+                    // Before sending a new deferred message, delete previous ones
+
+                    // Step 3: Update deferred response via webhook
+                    try {
+                        const response = await axios.patch(
+                            `https://discord.com/api/v10/webhooks/${application_id}/${token}/messages/@original`,
+                            { embeds },
+                            { headers: { "Content-Type": "application/json" } }
+                        );
+                        //console.log("Discord API Response:", response.data);
+                    } catch (error) {
+                        console.error("Error updating message:", error.response?.data || error.message);
                     }
-                });
-                
-            console.error(`Unknown command: ${data.name}`);
-            return res.status(400).json({ error: 'Unknown command' });
+                    console.log("Message updated successfully!");
+                } catch (error) {
+                    console.error("Error updating message:", error.response?.data || error.message);
+                }
+            })();
         }
-    }
+        
+    }              
 
-    console.error(`Unknown interaction type: ${type}`);
-    return res.status(400).json({ error: 'Unknown interaction type' });
+    //console.error(`Unknown interaction type: ${type}`);
+    //return res.status(400).json({ error: 'Unknown interaction type' });
 });
 
 async function getSummoner(summonerName, tag) {
@@ -156,7 +198,6 @@ async function getWinOrLoss() {
         gameData = response.data;
     } catch (error) {
         console.error("Error fetching summoner:", error.response.data);
-        console.error("RIOT_API_KEY", RIOT_API_KEY);
     }
     let i;
     for (i = 0; gameData.metadata.participants[i]; i++) {
@@ -200,7 +241,7 @@ async function getActiveGame() {
         }
         await fetchChampionId();
         png = await fetchChampionImg(championMap[championId], activeGame.participants[i].spell1Id, activeGame.participants[i].spell2Id);
-        console.log("activeGame", activeGame);
+        //console.log("activeGame", activeGame);
         console.log('png: ', png);
         console.log('spell1: ', spell1Img.name);
         console.log('spell2: ', spell2Img.name);
