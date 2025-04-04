@@ -14,15 +14,21 @@ import { startServer, app, PORT } from './server.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { capitalize } from './utils.js';
 
-import { ApplicationCommand, EmbedBuilder } from 'discord.js';
+import { ApplicationCommand, EmbedBuilder, AttachmentBuilder } from 'discord.js';
+import { Canvas, loadImage, createCanvas } from 'canvas';
+import { FormData } from 'node-fetch';
 
 let puuid;
 let playerId;
 let championId;
 let latestPatch;
 let png;
+let summoner = {};
+let summonerName;
+let summonerTag;
 let spell1Img = {};
 let spell2Img = {};
+let iconImg = {};
 let games = {};
 let gameData = {};
 let championMap = {};
@@ -59,10 +65,10 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             console.log("Handling 'active' command...");
         
             resetVar();
-            const summonerName = data.options.find(opt => opt.name === 'summonername')?.value;
-            const summonerTag = data.options.find(opt => opt.name === 'summonertag')?.value;
+            summonerName = data.options.find(opt => opt.name === 'summonername')?.value;
+            summonerTag = data.options.find(opt => opt.name === 'summonertag')?.value;
         
-            await getSummoner(summonerName, summonerTag);
+            await getPuuid(summonerName, summonerTag);
             await getActiveGame();
         
             if (!activeGame.gameId) {
@@ -71,73 +77,82 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     data: { content: `Status: Not currently in game.` }
                 });
             }
-            // Step 1: Send Deferred Response
             res.json({
                 type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
             });
+
+
+            //const mainImageBuffer = await resizeImage(png, 800, 600);    // Larger size for main image
+            const spell1Buffer = await resizeImage(spell1Img.image, 100, 100);     // Smaller size for spells
+            //const spell2Buffer = await resizeImage(spell2Img.image, 100, 100);
+    
+            //const mainAttachment = new AttachmentBuilder(mainImageBuffer, { name: 'main.png' });
+            const spell1Attachment = new AttachmentBuilder(spell1Buffer, { name: 'spell1.png' });
+            //const spell2Attachment = new AttachmentBuilder(spell2Buffer, { name: 'spell2.png' });
+
         
-            // Step 2: Process asynchronously
             (async () => {
                 try {
                     const opURL = `https://www.op.gg/summoners/na/${summonerName}-${summonerTag}`;
-        
-                    // const embeds = [
-                    //     new EmbedBuilder()
-                    //         .setURL(opURL)
-                    //         .setImage(png)
-                    //         .setTitle("Champion Info")
-                    //         .setDescription("Champion Details")
-                    //         .setFooter({ text: "footer" }),
-                    
-                    //     new EmbedBuilder()
-                    //         .setURL(opURL)
-                    //         .setImage(spell1Img.image)
-                    //         .setTitle("Summoner Spell 1")  // Ensure it has a title
-                    //         .setDescription("Spell details"), // Added description
-                    
-                    //     new EmbedBuilder()
-                    //         .setURL(opURL)
-                    //         .setImage(spell2Img.image)
-                    //         .setTitle("Summoner Spell 2")  // Ensure it has a title
-                    //         .setDescription("Spell details") // Added description
-                    // ].map(embed => embed.toJSON()); // Convert to JSON before sending
                     
                     const embeds = [
                                new EmbedBuilder()
-                                        .setURL(opURL)
-                                        .setImage(png)
-                                        .setTitle(`${summonerName}`)
-                                        .setDescription(`Status: In Game\nGame Mode: ${activeGame.gameMode == 'CHERRY' ? 'ARENA' : activeGame.gameMode}\nGame Type: ${activeGame.gameQueueConfigId == '420' ? 'Ranked' : activeGame.gameType}`)
-                                        .setFooter({ text: "footer" }), 
+                                    .setURL(opURL)
+                                    .setImage(png)
+                                    .setThumbnail(iconImg.image)
+                                    .setColor('#0096FF')
+                                    .setTitle(`${summonerName}`)
+                                    .setDescription(`Status: In Game\nGame Mode: ${activeGame.gameMode == 'CHERRY' ? 'ARENA' : activeGame.gameMode}\nGame Type: ${activeGame.gameQueueConfigId == '420' ? 'Ranked' : activeGame.gameType}`)
+                                    .setFooter({ text: "Jinx bot" }),
                                 new EmbedBuilder()
                                     .setURL(opURL)
                                     .setImage(spell1Img.image)
-                                    .setTitle("Summoner Spell 1")  // Ensure it has a title
-                                    .setDescription("Spell details"), // Added description
+                                    .setTitle("Summoner Spell 1")
+                                    .setDescription("Spell details"),
 
                                 new EmbedBuilder()
                                     .setURL(opURL)
                                     .setImage(spell2Img.image)
-                                    .setTitle("Summoner Spell 2")  // Ensure it has a title
-                                    .setDescription("Spell details") // Added description
+                                    .setTitle("Summoner Spell 2")
+                                    .setDescription("Spell details")
                     ];
-        
-                    // Before sending a new deferred message, delete previous ones
 
-                    // Step 3: Update deferred response via webhook
+                    const files = [
+                    //    {buffer: mainImageBuffer, name: 'main.png'},
+                        {buffer: spell1Buffer, name: 'spell1.png'},
+                    //    {buffer: spell2Buffer, name: 'spell2.png'},
+                    ]
+        
+
+                    
+                    const formData = new FormData;
+
+                    
+                    //files.forEach((file, index) => {
+                    //    formData.append(`files[${index}]`, file.buffer, file.name);
+                    //});
+                    
+                    //formData.append('payload_json', JSON.stringify({ embeds: embeds }));
+                    //formData.append('files[0]', spell1Buffer, 'spell1.png');
+
                     try {
                         const response = await axios.patch(
                             `https://discord.com/api/v10/webhooks/${application_id}/${token}/messages/@original`,
-                            { embeds },
-                            { headers: { "Content-Type": "application/json" } }
+                            { embeds } , { headers: { "Content-Type": "application/json" } }
                         );
-                        //console.log("Discord API Response:", response.data);
                     } catch (error) {
                         console.error("Error updating message:", error.response?.data || error.message);
+                        const response = await axios.patch(
+                            `https://discord.com/api/v10/webhooks/${application_id}/${token}/messages/@original`,
+                            { 'content': 'error patching'}
+                        );
                     }
-                    console.log("Message updated successfully!");
                 } catch (error) {
                     console.error("Error updating message:", error.response?.data || error.message);
+                    const response = await axios.patch(
+                        `https://discord.com/api/v10/webhooks/${application_id}/${token}/messages/@original`,
+                        { 'content': 'error'}
+                    );
                 }
             })();
         }
@@ -148,8 +163,24 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     //return res.status(400).json({ error: 'Unknown interaction type' });
 });
 
-async function getSummoner(summonerName, tag) {
-    summonerName = summonerName.replace(" ", "%20");
+async function resizeImage(imageUrl, maxWidth, maxHeight) {
+    const image = await loadImage(imageUrl);
+    
+    let ratio = Math.min(maxWidth / image.width, maxHeight / image.height);
+    let newWidth = image.width * ratio;
+    let newHeight = image.height * ratio;
+
+    const canvas = createCanvas(newWidth, newHeight);
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#0099ff';
+
+    ctx.drawImage(image, 0, 0, newWidth, newHeight);
+  
+    return canvas.toBuffer('image/png');
+}
+
+async function getPuuid(summonerName, tag) {
+    summonerName.replace(" ", "%20");
     const url = `https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${summonerName}/${tag}`;
     const headers = { "X-Riot-Token":RIOT_API_KEY };
 
@@ -158,9 +189,9 @@ async function getSummoner(summonerName, tag) {
         const response = await axios.get(url, { headers });
         //console.log(response.data);
         puuid = response.data["puuid"];
+        console.log(puuid);
     } catch (error) {
         console.error("Error fetching summoner:", error.response.data);
-        console.error("RIOT_API_KEY", RIOT_API_KEY);
     }
 }
 
@@ -176,6 +207,25 @@ async function getGames() {
         const response = await axios.get(url, headers);
        // console.log(response.data);
         games = response.data;
+
+    } catch (error) {
+        console.error("Error fetching summoner:", error.response.data);
+        console.error("RIOT_API_KEY", RIOT_API_KEY);
+    }
+
+}
+
+async function getSummoner() {
+    const url = `https://na1.api.riotgames.com/riot/summoner/v4/summoners/by-puuid/${puuid}`;
+    const headers = { 
+        headers: { 
+            "X-Riot-Token": RIOT_API_KEY 
+        }
+    };
+    try {
+        const response = await axios.get(url, headers);
+       // console.log(response.data);
+        summoner = response.data;
 
     } catch (error) {
         console.error("Error fetching summoner:", error.response.data);
@@ -230,7 +280,7 @@ async function getActiveGame() {
     }
     let i;
     if (!activeGame.gameId)
-        console.log("No game found..!");
+        console.log(`No game found for ${summonerName}#${summonerTag}..!`);
     else {
         for (i = 0; activeGame.participants[i]; i++) {
         if (activeGame.participants[i].puuid == puuid) {
@@ -240,11 +290,12 @@ async function getActiveGame() {
             }
         }
         await fetchChampionId();
-        png = await fetchChampionImg(championMap[championId], activeGame.participants[i].spell1Id, activeGame.participants[i].spell2Id);
+        png = await fetchChampionImg(championMap[championId], activeGame.participants[i].spell1Id, activeGame.participants[i].spell2Id, activeGame.participants[i].profileIconId);
         //console.log("activeGame", activeGame);
         console.log('png: ', png);
         console.log('spell1: ', spell1Img.name);
         console.log('spell2: ', spell2Img.name);
+        console.log('profileIcon: ', iconImg.image);
         console.log("In Game");
         console.log(activeGame.gameMode);
         console.log(activeGame.gameType);
@@ -268,7 +319,7 @@ async function fetchChampionId() {
     }
 }
 
-async function fetchChampionImg(championName, spell1, spell2) {
+async function fetchChampionImg(championName, spell1, spell2, iconId) {
     const response = await fetch("https://ddragon.leagueoflegends.com/api/versions.json");
     const versions = await response.json();
     latestPatch = versions[0];
@@ -276,6 +327,7 @@ async function fetchChampionImg(championName, spell1, spell2) {
     //console.log("spellMap", spellMap);
     spell1Img = await getSpellImageAndName(spell1);
     spell2Img = await getSpellImageAndName(spell2);
+    iconImg = await getSummonerIcon(iconId);
     //console.log("ss img", spell1Img);
     //console.log("ss img", spell2);
     return `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/champion/${championName}.png`;
@@ -313,12 +365,29 @@ async function getSpellImageAndName(spellId) {
     return null;
 }
 
+async function getSummonerIcon(iconId) {
+
+    console.log("icon image link: ", iconId);
+    if (iconId) {
+        return {
+            name: iconId,
+            image: `https://ddragon.leagueoflegends.com/cdn/${latestPatch}/img/profileicon/${iconId}.png`
+        };
+    }
+    else
+        console.log("Profile icon not found");
+    return null;
+}
+
 function resetVar() {
     puuid;
     games = {};
     gameData = {};
     playerId;
     championId;
+    summonerName;
+    summonerTag;
     championMap = {};
     activeGame = {};
+    spell1Img = {};
 }
